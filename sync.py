@@ -70,7 +70,9 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
     # First, resolve the group ID
     url = f"{ZENDESK_BASE_URL}/api/v2/groups.json"
     resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"❌ Zendesk groups API error {resp.status_code}: {resp.text[:500]}")
+        resp.raise_for_status()
     groups = resp.json().get("groups", [])
     group_id = None
     for g in groups:
@@ -122,7 +124,9 @@ def fetch_airtable_records():
 
     while True:
         resp = requests.get(url, headers=airtable_headers(), params=params)
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"❌ Airtable API error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
         data = resp.json()
         records.extend(data.get("records", []))
         offset = data.get("offset")
