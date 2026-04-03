@@ -1,5 +1,5 @@
 """
-Zendesk → Airtable Ticket Log Sync
+Zendesk > Airtable Ticket Log Sync
 ===================================
 Pulls recent tickets from the Zendesk IT-Operations-Projects group,
 compares them against the CatherineAirbase Ticket Log in Airtable,
@@ -72,7 +72,7 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
     url = f"{ZENDESK_BASE_URL}/api/v2/groups.json"
     resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
     if not resp.ok:
-        print(f"❌ Zendesk groups API error {resp.status_code}: {resp.text[:500]}")
+        print(f"Zendesk groups API error {resp.status_code}: {resp.text[:500]}")
         resp.raise_for_status()
     groups = resp.json().get("groups", [])
     group_id = None
@@ -82,7 +82,7 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
             break
 
     if not group_id:
-        print(f"⚠️  Group '{group_name}' not found. Available groups:")
+        print(f"Group '{group_name}' not found. Available groups:")
         for g in groups:
             print(f"   - {g['name']} (id: {g['id']})")
         sys.exit(1)
@@ -96,7 +96,7 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
     while url:
         resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
         if not resp.ok:
-            print(f"❌ Zendesk search API error {resp.status_code}: {resp.text[:500]}")
+            print(f"Zendesk search API error {resp.status_code}: {resp.text[:500]}")
             resp.raise_for_status()
         data = resp.json()
         tickets.extend(data.get("results", []))
@@ -104,7 +104,7 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
         if len(tickets) >= 500:
             break
 
-    print(f"📥 Fetched {len(tickets)} Zendesk tickets from '{group_name}'")
+    print(f"Fetched {len(tickets)} Zendesk tickets from '{group_name}'")
     return tickets
 
 
@@ -127,7 +127,7 @@ def fetch_airtable_records():
     while True:
         resp = requests.get(url, headers=airtable_headers(), params=params)
         if not resp.ok:
-            print(f"❌ Airtable API error {resp.status_code}: {resp.text[:500]}")
+            print(f"Airtable API error {resp.status_code}: {resp.text[:500]}")
             resp.raise_for_status()
         data = resp.json()
         records.extend(data.get("records", []))
@@ -136,7 +136,7 @@ def fetch_airtable_records():
             break
         params["offset"] = offset
 
-    print(f"📋 Found {len(records)} existing Airtable records")
+    print(f"Found {len(records)} existing Airtable records")
     return records
 
 
@@ -149,7 +149,7 @@ def create_airtable_records(records_to_create):
         payload = {"records": batch, "typecast": True}
         resp = requests.post(url, headers=airtable_headers(), json=payload)
         if not resp.ok:
-            print(f"❌ Airtable create error {resp.status_code}: {resp.text[:500]}")
+            print(f"Airtable create error {resp.status_code}: {resp.text[:500]}")
             resp.raise_for_status()
         created += len(batch)
     return created
@@ -164,7 +164,7 @@ def update_airtable_records(records_to_update):
         payload = {"records": batch, "typecast": True}
         resp = requests.patch(url, headers=airtable_headers(), json=payload)
         if not resp.ok:
-            print(f"❌ Airtable update error {resp.status_code}: {resp.text[:500]}")
+            print(f"Airtable update error {resp.status_code}: {resp.text[:500]}")
             resp.raise_for_status()
         updated += len(batch)
     return updated
@@ -179,7 +179,7 @@ def delete_airtable_records(record_ids):
         params = "&".join(f"records[]={r}" for r in batch)
         resp = requests.delete(f"{url}?{params}", headers=airtable_headers())
         if not resp.ok:
-            print(f"❌ Airtable delete error {resp.status_code}: {resp.text[:500]}")
+            print(f"Airtable delete error {resp.status_code}: {resp.text[:500]}")
             resp.raise_for_status()
         deleted += len(batch)
         time.sleep(0.2)  # Rate limit courtesy
@@ -225,7 +225,7 @@ def zendesk_to_airtable_fields(ticket):
 
 def cleanup_duplicates():
     """Find and delete duplicate Ticket ID records, keeping the oldest."""
-    print("🧹 Cleanup mode: scanning for duplicate Ticket IDs...")
+    print("Cleanup mode: scanning for duplicate Ticket IDs...")
     print()
 
     airtable_records = fetch_airtable_records()
@@ -250,11 +250,11 @@ def cleanup_duplicates():
                 to_delete.append(dup["record_id"])
 
     if not to_delete:
-        print("✅ No duplicates found!")
+        print("No duplicates found.")
         return
 
     print(f"Found {len(to_delete)} duplicate record(s) to delete")
-    print(f"🗑️  Deleting...")
+    print("Deleting...")
     deleted = delete_airtable_records(to_delete)
 
     print()
@@ -268,7 +268,7 @@ def cleanup_duplicates():
 # ── Main sync ───────────────────────────────────────────────────────────────
 
 def main():
-    print(f"🔄 Zendesk → Airtable sync starting at {datetime.now(timezone.utc).isoformat()}")
+    print(f"Zendesk > Airtable sync starting at {datetime.now(timezone.utc).isoformat()}")
     print()
 
     # Step 1: Fetch existing Airtable records and index by Ticket ID
@@ -327,11 +327,11 @@ def main():
     updated_count = 0
 
     if to_create:
-        print(f"➕ Creating {len(to_create)} new ticket(s)...")
+        print(f"Creating {len(to_create)} new ticket(s)...")
         created_count = create_airtable_records(to_create)
 
     if to_update:
-        print(f"✏️  Updating {len(to_update)} ticket(s)...")
+        print(f"Updating {len(to_update)} ticket(s)...")
         updated_count = update_airtable_records(to_update)
 
     # Step 5: Summary
@@ -344,7 +344,7 @@ def main():
     print(f"  New records:       {created_count}")
     print(f"  Updated records:   {updated_count}")
     if not to_create and not to_update:
-        print("  ✅ Ticket Log is already up to date!")
+        print("  Ticket Log is already up to date.")
     print("═" * 50)
 
 
