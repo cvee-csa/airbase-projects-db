@@ -6,7 +6,8 @@ compares them against the CatherineAirbase Ticket Log in Airtable,
 and creates or updates records to keep the two in sync.
 
 Usage:
-    python sync.py
+    python sync.py              # Normal sync
+    python sync.py --cleanup    # Find and delete duplicate Ticket IDs
 
 Environment variables required:
     ZENDESK_SUBDOMAIN   — e.g. "cloudsecurityalliance"
@@ -17,8 +18,9 @@ Environment variables required:
 
 import os
 import sys
-import json
+import time
 import requests
+from collections import defaultdict
 from datetime import datetime, timezone
 
 # ── Configuration ───────────────────────────────────────────────────────────
@@ -67,7 +69,6 @@ def zendesk_auth():
 
 def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
     """Fetch all recently updated tickets in the given group via Zendesk Search API."""
-    # First, resolve the group ID
     url = f"{ZENDESK_BASE_URL}/api/v2/groups.json"
     resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
     if not resp.ok:
@@ -86,7 +87,6 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
             print(f"   - {g['name']} (id: {g['id']})")
         sys.exit(1)
 
-    # Search for tickets in this group, sorted by most recently updated
     tickets = []
     url = (
         f"{ZENDESK_BASE_URL}/api/v2/search.json"
@@ -95,11 +95,12 @@ def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
 
     while url:
         resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"❌ Zendesk search API error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
         data = resp.json()
         tickets.extend(data.get("results", []))
         url = data.get("next_page")
-        # Safety: cap at 500 tickets per run to avoid runaway pagination
         if len(tickets) >= 500:
             break
 
@@ -117,10 +118,11 @@ def airtable_headers():
 
 
 def fetch_airtable_records():
-    """Fetch all records from the Ticket Log table, handling pagination."""
+    """Fetch all records from the Ticket Log table, handling pagination.
+    Uses returnFieldsByFieldId=true so field keys match our FIELDS dict."""
     records = []
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{TICKET_LOG_TABLE_ID}"
-    params = {"pageSize": 100}
+    params = {"pageSize": 100, "returnFieldsByFieldId": "true"}
 
     while True:
         resp = requests.get(url, headers=airtable_headers(), params=params)
@@ -146,7 +148,9 @@ def create_airtable_records(records_to_create):
         batch = records_to_create[i : i + 10]
         payload = {"records": batch, "typecast": True}
         resp = requests.post(url, headers=airtable_headers(), json=payload)
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"❌ Airtable create error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
         created += len(batch)
     return created
 
@@ -159,9 +163,27 @@ def update_airtable_records(records_to_update):
         batch = records_to_update[i : i + 10]
         payload = {"records": batch, "typecast": True}
         resp = requests.patch(url, headers=airtable_headers(), json=payload)
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"❌ Airtable update error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
         updated += len(batch)
     return updated
+
+
+def delete_airtable_records(record_ids):
+    """Delete records from Airtable (max 10 per request)."""
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{TICKET_LOG_TABLE_ID}"
+    deleted = 0
+    for i in range(0, len(record_ids), 10):
+        batch = record_ids[i : i + 10]
+        params = "&".join(f"records[]={r}" for r in batch)
+        resp = requests.delete(f"{url}?{params}", headers=airtable_headers())
+        if not resp.ok:
+            print(f"❌ Airtable delete error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
+        deleted += len(batch)
+        time.sleep(0.2)  # Rate limit courtesy
+    return deleted
 
 
 # ── Mapping ─────────────────────────────────────────────────────────────────
@@ -175,8 +197,6 @@ def zendesk_to_airtable_fields(ticket):
     updated = ticket.get("updated_at", "")[:10]
 
     assignee_name = ""
-    assignee_id = ticket.get("assignee_id")
-    # If the ticket includes assignee info via sideloading
     if ticket.get("assignee") and isinstance(ticket["assignee"], dict):
         assignee_name = ticket["assignee"].get("name", "")
 
@@ -196,9 +216,53 @@ def zendesk_to_airtable_fields(ticket):
 
     tags = ticket.get("tags", [])
     if tags:
-        fields[FIELDS["Category"]] = tags[0]  # Use first tag as category
+        fields[FIELDS["Category"]] = tags[0]
 
     return fields
+
+
+# ── Cleanup mode ────────────────────────────────────────────────────────────
+
+def cleanup_duplicates():
+    """Find and delete duplicate Ticket ID records, keeping the oldest."""
+    print("🧹 Cleanup mode: scanning for duplicate Ticket IDs...")
+    print()
+
+    airtable_records = fetch_airtable_records()
+
+    # Group records by Ticket ID
+    by_ticket_id = defaultdict(list)
+    for rec in airtable_records:
+        tid = rec["fields"].get(FIELDS["Ticket ID"])
+        if tid:
+            by_ticket_id[int(tid)].append({
+                "record_id": rec["id"],
+                "created": rec.get("createdTime", ""),
+            })
+
+    # Find duplicates — keep the oldest record, delete the rest
+    to_delete = []
+    for tid, records in by_ticket_id.items():
+        if len(records) > 1:
+            # Sort by createdTime ascending, keep the first (oldest)
+            sorted_recs = sorted(records, key=lambda r: r["created"])
+            for dup in sorted_recs[1:]:
+                to_delete.append(dup["record_id"])
+
+    if not to_delete:
+        print("✅ No duplicates found!")
+        return
+
+    print(f"Found {len(to_delete)} duplicate record(s) to delete")
+    print(f"🗑️  Deleting...")
+    deleted = delete_airtable_records(to_delete)
+
+    print()
+    print("═" * 50)
+    print("  Cleanup Complete")
+    print("═" * 50)
+    print(f"  Duplicates removed: {deleted}")
+    print("═" * 50)
 
 
 # ── Main sync ───────────────────────────────────────────────────────────────
@@ -209,7 +273,7 @@ def main():
 
     # Step 1: Fetch existing Airtable records and index by Ticket ID
     airtable_records = fetch_airtable_records()
-    existing = {}  # ticket_id → { "record_id": ..., "status": ..., "fields": ... }
+    existing = {}  # ticket_id → { "record_id": ..., "status": ..., ... }
     for rec in airtable_records:
         tid = rec["fields"].get(FIELDS["Ticket ID"])
         if tid:
@@ -219,6 +283,8 @@ def main():
                 "assignee": rec["fields"].get(FIELDS["Assignee"], ""),
                 "fields": rec["fields"],
             }
+
+    print(f"   (Indexed {len(existing)} unique Ticket IDs)")
 
     # Step 2: Fetch Zendesk tickets
     zendesk_tickets = fetch_zendesk_tickets()
@@ -238,16 +304,13 @@ def main():
             rec = existing[tid]
             changes = {}
 
-            # Check for status change
             if new_status and new_status != rec["status"]:
                 changes[FIELDS["Status"]] = new_status
-                # If newly solved/closed, set resolved date
                 if new_status in ("Solved", "Closed"):
                     resolved = new_fields.get(FIELDS["Resolved Date"])
                     if resolved:
                         changes[FIELDS["Resolved Date"]] = resolved
 
-            # Check for assignee change
             new_assignee = new_fields.get(FIELDS["Assignee"], "")
             if new_assignee and new_assignee != rec["assignee"]:
                 changes[FIELDS["Assignee"]] = new_assignee
@@ -286,4 +349,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--cleanup" in sys.argv:
+        cleanup_duplicates()
+    else:
+        main()
