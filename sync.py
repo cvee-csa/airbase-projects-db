@@ -2,7 +2,7 @@
 Zendesk > Airtable Ticket Log Sync
 ===================================
 Pulls recent tickets from the Zendesk IT-Operations-Projects group,
-compares them against the CatherineAirbase Ticket Log in Airtable,
+compares them against the IT Operations Ticket Log base in Airtable,
 and creates or updates records to keep the two in sync.
 
 Usage:
@@ -30,19 +30,19 @@ ZENDESK_EMAIL = os.environ["ZENDESK_EMAIL"]
 ZENDESK_API_TOKEN = os.environ["ZENDESK_API_TOKEN"]
 AIRTABLE_PAT = os.environ["AIRTABLE_PAT"]
 
-AIRTABLE_BASE_ID = "app4guQr5NCgNngnE"
-TICKET_LOG_TABLE_ID = "tblRG0INg9CrAjss7"
+AIRTABLE_BASE_ID = "app4XrKvpbxN0B875"
+TICKET_LOG_TABLE_ID = "tbl7TP1N16sygE1sA"
 
-# Airtable field IDs (CatherineAirbase → Ticket Log)
+# Airtable field IDs (IT Operations Ticket Log base)
 FIELDS = {
-    "Ticket ID":     "fldr03hDL2ALkVgmF",
-    "Subject":       "fldRjOw5g3AWRJ4Cq",
-    "Status":        "fldUvaYeae9vLCdCp",
-    "Assignee":      "fldvZuQaPw7qtWpxV",
-    "Category":      "fldeUn3ynF0GfkDaD",
-    "Created Date":  "fldfS6sxSPL44LiJ8",
-    "Resolved Date": "fldpv9VFnGSUrerH9",
-    "Zendesk URL":   "fldEXjMzIj33Szi5U",
+    "Ticket ID":     "fldWbiPJyq1ytbeuP",
+    "Subject":       "fldQmddnKJApPrJi9",
+    "Status":        "flda1Z4AD9JgIRAbO",
+    "Assignee":      "fldMoue2tH2SWJTaW",
+    "Category":      "fld61AOK6V25vHKG3",
+    "Created Date":  "fld3WOOSo2aiDrWTy",
+    "Resolved Date": "fldtkAK7m9ydYfDLo",
+    "Zendesk URL":   "fldc8cQ6N5sSVnzGh",
 }
 
 ZENDESK_BASE_URL = f"https://{ZENDESK_SUBDOMAIN}.zendesk.com"
