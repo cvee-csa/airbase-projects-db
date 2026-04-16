@@ -117,6 +117,30 @@ def airtable_headers():
     }
 
 
+def verify_airtable_access():
+    """Fail early with a clearer message if the Airtable base/table is inaccessible."""
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{TICKET_LOG_TABLE_ID}"
+    params = {"maxRecords": 1, "returnFieldsByFieldId": "true"}
+
+    print(
+        "Checking Airtable access "
+        f"(base={AIRTABLE_BASE_ID}, table={TICKET_LOG_TABLE_ID})..."
+    )
+    resp = requests.get(url, headers=airtable_headers(), params=params)
+    if resp.ok:
+        return
+
+    print(f"Airtable access check failed for base={AIRTABLE_BASE_ID} table={TICKET_LOG_TABLE_ID}")
+    print(f"Airtable API error {resp.status_code}: {resp.text[:500]}")
+    if resp.status_code in (401, 403):
+        print(
+            "Verify that AIRTABLE_PAT belongs to a user who can open this base "
+            "and that the token includes data.records:read/data.records:write "
+            "access for this exact base."
+        )
+    resp.raise_for_status()
+
+
 def fetch_airtable_records():
     """Fetch all records from the Ticket Log table, handling pagination.
     Uses returnFieldsByFieldId=true so field keys match our FIELDS dict."""
@@ -349,6 +373,7 @@ def main():
 
 
 if __name__ == "__main__":
+    verify_airtable_access()
     if "--cleanup" in sys.argv:
         cleanup_duplicates()
     else:
