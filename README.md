@@ -15,9 +15,10 @@ You can also trigger a sync manually from the **Actions** tab at any time.
 
 ## Setup
 
-### 1. Add repository secrets
+### 1. Add environment secrets
 
-Go to **Settings → Secrets and variables → Actions** and add:
+Go to **Settings → Environments → production** and add these secrets for the
+`production` environment:
 
 | Secret               | Value                                                                |
 | -------------------- | -------------------------------------------------------------------- |
@@ -28,7 +29,9 @@ Go to **Settings → Secrets and variables → Actions** and add:
 
 ### 2. Push and enable
 
-Once the secrets are saved, push this repo. The workflow will run on the next weekday morning, or you can trigger it immediately via **Actions → Zendesk → Airtable Sync → Run workflow**.
+Once the environment secrets are saved, push this repo. The workflow will use
+the `production` environment, and you can trigger it via
+**Actions → Zendesk → Airtable Sync → Run workflow**.
 
 ## Running locally
 
