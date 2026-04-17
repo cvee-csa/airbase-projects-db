@@ -109,6 +109,28 @@ def fetch_zendesk_tickets(group_name=DEFAULT_ZENDESK_GROUP):
     return tickets
 
 
+def fetch_zendesk_users(user_ids):
+    """Return a map of Zendesk user id -> display name for assignee lookups."""
+    user_ids = sorted({uid for uid in user_ids if uid})
+    if not user_ids:
+        return {}
+
+    users_by_id = {}
+    for i in range(0, len(user_ids), 100):
+        batch = user_ids[i : i + 100]
+        params = "&".join(f"ids[]={user_id}" for user_id in batch)
+        url = f"{ZENDESK_BASE_URL}/api/v2/users/show_many.json?{params}"
+        resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
+        if not resp.ok:
+            print(f"Zendesk users API error {resp.status_code}: {resp.text[:500]}")
+            resp.raise_for_status()
+        for user in resp.json().get("users", []):
+            users_by_id[user["id"]] = user.get("name", "")
+
+    print(f"Resolved {len(users_by_id)} Zendesk assignee name(s)")
+    return users_by_id
+
+
 # ── Airtable helpers ────────────────────────────────────────────────────────
 
 def airtable_headers():
@@ -213,7 +235,7 @@ def delete_airtable_records(record_ids):
 
 # ── Mapping ─────────────────────────────────────────────────────────────────
 
-def zendesk_to_airtable_fields(ticket):
+def zendesk_to_airtable_fields(ticket, assignees_by_id=None):
     """Convert a Zendesk ticket dict to Airtable field values."""
     status_raw = ticket.get("status", "")
     status = STATUS_MAP.get(status_raw, status_raw.capitalize())
@@ -224,6 +246,8 @@ def zendesk_to_airtable_fields(ticket):
     assignee_name = ""
     if ticket.get("assignee") and isinstance(ticket["assignee"], dict):
         assignee_name = ticket["assignee"].get("name", "")
+    elif assignees_by_id:
+        assignee_name = assignees_by_id.get(ticket.get("assignee_id"), "")
 
     fields = {
         FIELDS["Ticket ID"]:    ticket["id"],
@@ -311,8 +335,9 @@ def main():
 
     print(f"   (Indexed {len(existing)} unique Ticket IDs)")
 
-    # Step 2: Fetch Zendesk tickets
+    # Step 2: Fetch Zendesk tickets and resolve assignee names
     zendesk_tickets = fetch_zendesk_tickets()
+    assignees_by_id = fetch_zendesk_users(ticket.get("assignee_id") for ticket in zendesk_tickets)
 
     # Step 3: Compare and build create/update lists
     to_create = []
@@ -320,7 +345,7 @@ def main():
 
     for ticket in zendesk_tickets:
         tid = ticket["id"]
-        new_fields = zendesk_to_airtable_fields(ticket)
+        new_fields = zendesk_to_airtable_fields(ticket, assignees_by_id=assignees_by_id)
         new_status = new_fields.get(FIELDS["Status"], "")
 
         if tid not in existing:
@@ -337,7 +362,7 @@ def main():
                         changes[FIELDS["Resolved Date"]] = resolved
 
             new_assignee = new_fields.get(FIELDS["Assignee"], "")
-            if new_assignee and new_assignee != rec["assignee"]:
+            if new_assignee != rec["assignee"]:
                 changes[FIELDS["Assignee"]] = new_assignee
 
             if changes:
