@@ -1,7 +1,7 @@
 """
 Zendesk > Airtable Ticket Log Sync
 ===================================
-Pulls recent tickets from the Zendesk IT-Operations-Projects group,
+Pulls recent tickets from the Zendesk IT-Operations group,
 compares them against the IT Operations Ticket Log base in Airtable,
 and creates or updates records to keep the two in sync.
 
@@ -32,6 +32,7 @@ AIRTABLE_PAT = os.environ["AIRTABLE_PAT"]
 
 AIRTABLE_BASE_ID = "app4XrKvpbxN0B875"
 TICKET_LOG_TABLE_ID = "tbl7TP1N16sygE1sA"
+DEFAULT_ZENDESK_GROUP = "IT-Operations"
 
 # Airtable field IDs (IT Operations Ticket Log base)
 FIELDS = {
@@ -67,7 +68,7 @@ def zendesk_auth():
     return (f"{ZENDESK_EMAIL}/token", ZENDESK_API_TOKEN)
 
 
-def fetch_zendesk_tickets(group_name="IT-Operations-Projects"):
+def fetch_zendesk_tickets(group_name=DEFAULT_ZENDESK_GROUP):
     """Fetch all recently updated tickets in the given group via Zendesk Search API."""
     url = f"{ZENDESK_BASE_URL}/api/v2/groups.json"
     resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
