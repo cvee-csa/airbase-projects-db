@@ -118,8 +118,8 @@ def fetch_zendesk_users(user_ids):
     users_by_id = {}
     for i in range(0, len(user_ids), 100):
         batch = user_ids[i : i + 100]
-        params = "&".join(f"ids[]={user_id}" for user_id in batch)
-        url = f"{ZENDESK_BASE_URL}/api/v2/users/show_many.json?{params}"
+        ids_param = ",".join(str(user_id) for user_id in batch)
+        url = f"{ZENDESK_BASE_URL}/api/v2/users/show_many.json?ids={ids_param}"
         resp = requests.get(url, auth=zendesk_auth(), headers=zendesk_headers())
         if not resp.ok:
             print(f"Zendesk users API error {resp.status_code}: {resp.text[:500]}")
