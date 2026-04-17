@@ -1,13 +1,13 @@
 # airbase-projects-db
 
-Automated sync between the **Zendesk IT-Operations-Projects** ticket queue and the **CatherineAirbase** Ticket Log in Airtable.
+Automated sync between the **Zendesk IT-Operations** ticket queue and the **IT Operations Ticket Log** in Airtable.
 
 ## What it does
 
 A GitHub Actions workflow runs every weekday at 8:00 AM Pacific and:
 
 1. Pulls all existing records from the Airtable Ticket Log
-2. Fetches tickets from the Zendesk IT-Operations-Projects group
+2. Fetches tickets from the Zendesk IT-Operations group
 3. Creates Airtable records for any new tickets
 4. Updates status, assignee, and resolved date for changed tickets
 
@@ -25,7 +25,7 @@ Go to **Settings → Environments → production** and add these secrets for the
 | `ZENDESK_SUBDOMAIN`  | `cloudsecurityalliance`                                              |
 | `ZENDESK_EMAIL`      | Your Zendesk agent email (e.g. `cvee@cloudsecurityalliance.org`)     |
 | `ZENDESK_API_TOKEN`  | Zendesk API token — **Admin → Channels → API**                      |
-| `AIRTABLE_PAT`       | Airtable Personal Access Token with `data.records:read` and `data.records:write` scopes on the CatherineAirbase base — [create one here](https://airtable.com/create/tokens) |
+| `AIRTABLE_PAT`       | Airtable Personal Access Token with `data.records:read` and `data.records:write` scopes on the IT Operations Ticket Log base — [create one here](https://airtable.com/create/tokens) |
 
 ### 2. Push and enable
 
